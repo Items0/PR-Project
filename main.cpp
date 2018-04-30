@@ -2,6 +2,8 @@
 #include <mpi.h>
 #include <pthread.h>
 #include <iostream>
+#include <algorithm> 
+#include <unistd.h>
 #define nArbiter 2
 #define MYTAG 100
 
@@ -20,12 +22,21 @@ using namespace std;
 	22 - nie OK?
 */
 
+enum tags
+{
+    TAG_ARB_QUE = 10, 
+    TAG_ARB_ANS_OK = 20,
+    TAG_ARB_ANS_NO = 30
+} myTAG;
+
 int size, myrank;
 int arbiter = nArbiter;
 int lamportClock = 0;
+int nAgree = 0;
 
 void *receive_loop(void * arg);
-
+void clockUpdate(int valueFromMsg);
+void clockUpdate();
 
 pthread_mutex_t	receive_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t	send_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -43,27 +54,39 @@ int main(int argc, char **argv)
 	//Create thread
 	pthread_t receive_thread;
 	pthread_create(&receive_thread, NULL, receive_loop, 0);
-
+	
 	MPI_Comm_size(MPI_COMM_WORLD, &size);
 	MPI_Comm_rank(MPI_COMM_WORLD, &myrank);
 
 	int message[3];
-	MPI_Status status;
-	if(myrank == 0) 
+	//MPI_Status status;
+	if(myrank == 0 || myrank == 3) 
 	{
-		
-		for (int i = 0; i < size; i++)
+		while(1)
 		{
-			if (i != myrank)
+			for (int i = 0; i < size; i++)
 			{
-				lamportClock += 1;
-				message[0] = myrank;
-				message[1] = 10;
-				message[2] = lamportClock;
-				MPI_Send(&message, 3, MPI_INT, i, MYTAG, MPI_COMM_WORLD);
-				cout << lamportClock << ":" << myrank << "\tWyslalem do " << i << "\n";
-			}	
-		}
+				if (i != myrank)
+				{
+					clockUpdate();
+					message[0] = myrank;
+					message[1] = TAG_ARB_QUE;
+					message[2] = lamportClock;
+					MPI_Send(&message, 3, MPI_INT, i, MYTAG, MPI_COMM_WORLD);
+					cout << lamportClock << ":" << myrank << "\t\tWyslalem do " << i << "\n" << flush;
+				}	
+			}
+			sleep(5);
+			while (nAgree != size -1) 
+			{
+				cout << lamportClock << ":" << myrank << "\t\t Za malo zgod\n";
+				sleep(1);
+			}
+			nAgree = 0;
+		};
+		
+		
+		/*
 		for(int i = 0; i < size - 1; i++)
 		{
 			MPI_Recv(&message, 3, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
@@ -77,8 +100,9 @@ int main(int argc, char **argv)
 				lamportClock += 1;
 			}
 			cout << lamportClock << ":" << myrank << "\tOdebralem --- (Nadawca = " << message[0] << ", TAG = " << message[1] << ", Clock nadawcy = " << message[2] << "\n";
-		}
+		}*/
 	}
+	/*
 	else 
 	{
 		MPI_Recv(&message, 3, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
@@ -99,12 +123,49 @@ int main(int argc, char **argv)
 		MPI_Send(&message, 3, MPI_INT, 0, MYTAG, MPI_COMM_WORLD);
 		cout << lamportClock << ":" << myrank << "\tWyslalem z czasem\n";
 	}
+	*/
 	MPI_Finalize();
 }
 
 void *receive_loop(void * arg) {
+	cout << lamportClock << ":" <<myrank << "\t\treceive loop" << "\n" << flush;
 	MPI_Status status;
-	cout << lamportClock << ":" <<myrank << "\treceive loop" << "\n";
+	int message[3];
+	while (1)
+	{
+		MPI_Recv(&message, 3, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+		clockUpdate(message[2]);
+		switch (message[1])
+		{
+			case TAG_ARB_QUE:
+				cout << lamportClock << ":" << myrank << "\t\tOdebralem\n" << flush;
+				clockUpdate(message[2]);
+				message[0] = myrank;
+				message[1] = TAG_ARB_ANS_OK;
+				message[2] = lamportClock;
+				MPI_Send(&message, 3, MPI_INT, status.MPI_SOURCE, MYTAG, MPI_COMM_WORLD);
+				cout << lamportClock << ":" << myrank << "\t\tWyslalem z czasem\n" << flush;
+				break;
+
+			case TAG_ARB_ANS_OK:
+				clockUpdate();
+				nAgree += 1;
+				cout << lamportClock << ":" << myrank << "\t\tOdebralem zgode ("<< nAgree << "/" << size - 1 << ")\n" << flush;
+				break;
+		}
+	}
+	//cout << lamportClock << ":" <<myrank << "\treceive loop" << "\n";
 }
 
+void clockUpdate(int valueFromMsg) {
+	pthread_mutex_lock(&clock_mutex);
+	lamportClock = max(lamportClock, valueFromMsg) + 1;
+	pthread_mutex_unlock(&clock_mutex);
+}
+
+void clockUpdate() {
+	pthread_mutex_lock(&clock_mutex);
+	lamportClock += 1;
+	pthread_mutex_unlock(&clock_mutex);
+}
 
