@@ -4,6 +4,9 @@
 #include <iostream>
 #include <algorithm> 
 #include <unistd.h>
+#include <cstdlib>
+#include <ctime>
+#include <queue>
 #define nArbiter 2
 #define MYTAG 100
 
@@ -33,6 +36,9 @@ int size, myrank;
 int arbiter = nArbiter;
 int lamportClock = 0;
 int nAgree = 0;
+bool want = false; 
+queue <int> myQueue;
+int clockWhenStart;
 
 void *receive_loop(void * arg);
 void clockUpdate(int valueFromMsg);
@@ -59,9 +65,15 @@ int main(int argc, char **argv)
 	MPI_Comm_rank(MPI_COMM_WORLD, &myrank);
 
 	int message[3];
-	//MPI_Status status;
+	srand(myrank);
+	int delay;
+
 	while(1)
 	{
+		delay = rand() % 5;
+		sleep(delay);
+		printf("%d:%d\t\tDelay =  %d\n", lamportClock, myrank, delay);
+		want = true;
 		for (int i = 0; i < size; i++)
 		{
 			if (i != myrank)
@@ -71,19 +83,36 @@ int main(int argc, char **argv)
 				message[1] = TAG_ARB_QUE;
 				message[2] = lamportClock;
 				MPI_Send(&message, 3, MPI_INT, i, MYTAG, MPI_COMM_WORLD);
-				printf("%d:%d\t\tWyslalem do %d \n", lamportClock, myrank, i);
+				if (i == 0) clockWhenStart = lamportClock;
+				printf("%d:%d\t\tWyslalem do %d\n", lamportClock, myrank, i);
 				//cout << lamportClock << ":" << myrank << "\t\tWyslalem do " << i << "\n" << flush;
 			}	
 		}
 			
-		while (nAgree < size - 1) 
+		while (nAgree < size - arbiter) 
 		{
 			printf("%d:%d\t\tZa malo zgod\n", lamportClock, myrank);
 			//cout << lamportClock << ":" << myrank << "\t\t Za malo zgod\n";
 			sleep(1);
 		}
-		sleep(5);
+		printf("%d:%d\t\tCHLANIE! Zgody = %d\n", lamportClock, myrank, nAgree);
+		sleep(10);
+		printf("%d:%d\t\tKONIEC CHLANIA!\n", lamportClock, myrank);
+
+		want = false;	
 		nAgree = 0;
+		while(!myQueue.empty())
+		{
+			clockUpdate();
+			message[0] = myrank;
+			message[1] = TAG_ARB_ANS_OK;
+			message[2] = lamportClock;
+			MPI_Send(&message, 3, MPI_INT, myQueue.front(), MYTAG, MPI_COMM_WORLD);
+			printf("%d:%d\t\tWyslalem zgode z kolejki do %d\n", lamportClock, myrank, myQueue.front());
+			myQueue.pop();
+		};
+
+		sleep(5);
 	};
 		
 	MPI_Finalize();
@@ -104,11 +133,33 @@ void *receive_loop(void * arg) {
 				printf("%d:%d\t\tOdebralem\n", lamportClock, myrank);
 				//cout << lamportClock << ":" << myrank << "\t\tOdebralem\n" << flush;
 				clockUpdate(message[2]);
-				message[0] = myrank;
-				message[1] = TAG_ARB_ANS_OK;
-				message[2] = lamportClock;
-				MPI_Send(&message, 3, MPI_INT, status.MPI_SOURCE, MYTAG, MPI_COMM_WORLD);
-				printf("%d:%d\t\tWyslalem z czasem\n", lamportClock, myrank);
+				if (want == false)
+				{
+					message[0] = myrank;
+					message[1] = TAG_ARB_ANS_OK;
+					message[2] = lamportClock;
+					MPI_Send(&message, 3, MPI_INT, status.MPI_SOURCE, MYTAG, MPI_COMM_WORLD);
+					printf("%d:%d\t\tWyslalem z czasem\n", lamportClock, myrank);
+				}
+				else
+				{
+					printf("HERE\t\t%d\n", status.MPI_SOURCE);
+					//if(message[2] < lamportClock)
+					if(message[2] + status.MPI_SOURCE < clockWhenStart + myrank)
+					{
+						message[0] = myrank;
+						message[1] = TAG_ARB_ANS_OK;
+						message[2] = lamportClock;
+						MPI_Send(&message, 3, MPI_INT, status.MPI_SOURCE, MYTAG, MPI_COMM_WORLD);
+						printf("%d:%d\t\tWyslalem z czasem\n", lamportClock, myrank);
+					}
+					else
+					{
+						//Wstrzymaj
+						printf("%d:%d\t\tOdlozylem na kolejke\n", lamportClock, myrank);
+						myQueue.push(status.MPI_SOURCE);
+					}
+				}
 				//cout << lamportClock << ":" << myrank << "\t\tWyslalem z czasem\n" << flush;
 				break;
 
