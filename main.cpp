@@ -27,7 +27,7 @@ enum tags
     TAG_ARB_QUE = 10, 
     TAG_ARB_ANS_OK = 20,
     TAG_ARB_ANS_NO = 30
-} myTAG;
+};
 
 int size, myrank;
 int arbiter = nArbiter;
@@ -60,75 +60,38 @@ int main(int argc, char **argv)
 
 	int message[3];
 	//MPI_Status status;
-	if(myrank == 0 || myrank == 3) 
+	while(1)
 	{
-		while(1)
+		for (int i = 0; i < size; i++)
 		{
-			for (int i = 0; i < size; i++)
+			if (i != myrank)
 			{
-				if (i != myrank)
-				{
-					clockUpdate();
-					message[0] = myrank;
-					message[1] = TAG_ARB_QUE;
-					message[2] = lamportClock;
-					MPI_Send(&message, 3, MPI_INT, i, MYTAG, MPI_COMM_WORLD);
-					cout << lamportClock << ":" << myrank << "\t\tWyslalem do " << i << "\n" << flush;
-				}	
-			}
-			sleep(5);
-			while (nAgree != size -1) 
-			{
-				cout << lamportClock << ":" << myrank << "\t\t Za malo zgod\n";
-				sleep(1);
-			}
-			nAgree = 0;
-		};
-		
-		
-		/*
-		for(int i = 0; i < size - 1; i++)
-		{
-			MPI_Recv(&message, 3, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-			//printf("---0: Odebralem---(Nadawca = %d, TAG = %d, Clock nadawcy = %d)\n",message[0], message[1], message[2]);
-			if(lamportClock < message[2])
-			{
-				lamportClock = message[2] + 1;
-			}
-			else
-			{
-				lamportClock += 1;
-			}
-			cout << lamportClock << ":" << myrank << "\tOdebralem --- (Nadawca = " << message[0] << ", TAG = " << message[1] << ", Clock nadawcy = " << message[2] << "\n";
-		}*/
-	}
-	/*
-	else 
-	{
-		MPI_Recv(&message, 3, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-		cout << lamportClock << ":" << myrank << "\tOdebralem\n";
-		if(lamportClock < message[2])
-		{
-			lamportClock = message[2] + 1;
+				clockUpdate();
+				message[0] = myrank;
+				message[1] = TAG_ARB_QUE;
+				message[2] = lamportClock;
+				MPI_Send(&message, 3, MPI_INT, i, MYTAG, MPI_COMM_WORLD);
+				printf("%d:%d\t\tWyslalem do %d \n", lamportClock, myrank, i);
+				//cout << lamportClock << ":" << myrank << "\t\tWyslalem do " << i << "\n" << flush;
+			}	
 		}
-		else
+			
+		while (nAgree < size - 1) 
 		{
-			lamportClock += 1;
+			printf("%d:%d\t\tZa malo zgod\n", lamportClock, myrank);
+			//cout << lamportClock << ":" << myrank << "\t\t Za malo zgod\n";
+			sleep(1);
 		}
-		cout << lamportClock << ":" << myrank << "\tOdebralem z czasem\n";
-		lamportClock += 1;
-		message[0] = myrank;
-		message[1] = 20;
-		message[2] = lamportClock;
-		MPI_Send(&message, 3, MPI_INT, 0, MYTAG, MPI_COMM_WORLD);
-		cout << lamportClock << ":" << myrank << "\tWyslalem z czasem\n";
-	}
-	*/
+		sleep(5);
+		nAgree = 0;
+	};
+		
 	MPI_Finalize();
 }
 
 void *receive_loop(void * arg) {
-	cout << lamportClock << ":" <<myrank << "\t\treceive loop" << "\n" << flush;
+	printf("%d:%d\t\treceive loop\n", lamportClock, myrank);
+	//cout << lamportClock << ":" <<myrank << "\t\treceive loop" << "\n" << flush;
 	MPI_Status status;
 	int message[3];
 	while (1)
@@ -138,19 +101,22 @@ void *receive_loop(void * arg) {
 		switch (message[1])
 		{
 			case TAG_ARB_QUE:
-				cout << lamportClock << ":" << myrank << "\t\tOdebralem\n" << flush;
+				printf("%d:%d\t\tOdebralem\n", lamportClock, myrank);
+				//cout << lamportClock << ":" << myrank << "\t\tOdebralem\n" << flush;
 				clockUpdate(message[2]);
 				message[0] = myrank;
 				message[1] = TAG_ARB_ANS_OK;
 				message[2] = lamportClock;
 				MPI_Send(&message, 3, MPI_INT, status.MPI_SOURCE, MYTAG, MPI_COMM_WORLD);
-				cout << lamportClock << ":" << myrank << "\t\tWyslalem z czasem\n" << flush;
+				printf("%d:%d\t\tWyslalem z czasem\n", lamportClock, myrank);
+				//cout << lamportClock << ":" << myrank << "\t\tWyslalem z czasem\n" << flush;
 				break;
 
 			case TAG_ARB_ANS_OK:
 				clockUpdate();
 				nAgree += 1;
-				cout << lamportClock << ":" << myrank << "\t\tOdebralem zgode ("<< nAgree << "/" << size - 1 << ")\n" << flush;
+				printf("%d:%d\t\tOdebralem zgode(%d/%d)\n", lamportClock, myrank, nAgree, size - 1);
+				//cout << lamportClock << ":" << myrank << "\t\tOdebralem zgode ("<< nAgree << "/" << size - 1 << ")\n" << flush;
 				break;
 		}
 	}
