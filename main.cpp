@@ -1,64 +1,73 @@
 #include <stdio.h>
 #include <mpi.h>
+#include <pthread.h>
+#include <iostream>
 #define nArbiter 2
 #define MYTAG 100
 
-/*struct Message {
-	int sender_id;
-	int tag;
-	int timestamp;
+using namespace std;
 
-}*/
 /*
 	tablica message
 	0 - sender_id
 	1 - tag
 	2 - timestamp
-	3 - decision 
-		-1 - nie
-		0 - nic
-		1 - tak
 
 	TAGI:
 	10 - zapytanie o arbita
 	20 - odpowiedz do arbitra
+	21 - odpowiedz OK
+	22 - nie OK?
 */
+
+int size, myrank;
+int arbiter = nArbiter;
+int lamportClock = 0;
+
+void *receive_loop(void * arg);
+
+
+pthread_mutex_t	receive_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t	send_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+pthread_mutex_t	clock_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+
 int main(int argc, char **argv)
 {
-	int size, rank;
-	int arbiter = nArbiter;
-	int lamportClock = 0;
+	// Enable thread in MPI 
+	int provided = 0;
+	MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided);
+	//MPI_Init(&argc, &argv);
 
-	MPI_Status status;
+	//Create thread
+	pthread_t receive_thread;
+	pthread_create(&receive_thread, NULL, receive_loop, 0);
 
-	MPI_Init(&argc, &argv);
 	MPI_Comm_size(MPI_COMM_WORLD, &size);
-	int ARtab[size];
-	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+	MPI_Comm_rank(MPI_COMM_WORLD, &myrank);
 
-	int message[4];
-
-	if(rank == 0) 
+	int message[3];
+	MPI_Status status;
+	if(myrank == 0) 
 	{
 		
 		for (int i = 0; i < size; i++)
 		{
-			if (i != rank)
+			if (i != myrank)
 			{
 				lamportClock += 1;
-				message[0] = rank;
+				message[0] = myrank;
 				message[1] = 10;
 				message[2] = lamportClock;
-				message[3] = 0;
-				MPI_Send(&message, 4, MPI_INT, i, MYTAG, MPI_COMM_WORLD);
-				//printf("---0: Wyslalem--- %d\n", i);
-				printf("%d: Wyslalem z czasem %d, do %d\n", rank, lamportClock, i);
+				MPI_Send(&message, 3, MPI_INT, i, MYTAG, MPI_COMM_WORLD);
+				cout << lamportClock << ":" << myrank << "\tWyslalem do " << i << "\n";
 			}	
 		}
 		for(int i = 0; i < size - 1; i++)
 		{
-			MPI_Recv(&message, 4, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-			printf("---0: Odebralem---(Nadawca = %d, TAG = %d, Clock nadawcy = %d, decyzja = %d)\n",message[0], message[1], message[2], message[3]);
+			MPI_Recv(&message, 3, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+			//printf("---0: Odebralem---(Nadawca = %d, TAG = %d, Clock nadawcy = %d)\n",message[0], message[1], message[2]);
 			if(lamportClock < message[2])
 			{
 				lamportClock = message[2] + 1;
@@ -67,13 +76,13 @@ int main(int argc, char **argv)
 			{
 				lamportClock += 1;
 			}
-			printf("Lamport clock po odebraniu = %d)\n", lamportClock);
+			cout << lamportClock << ":" << myrank << "\tOdebralem --- (Nadawca = " << message[0] << ", TAG = " << message[1] << ", Clock nadawcy = " << message[2] << "\n";
 		}
 	}
 	else 
 	{
-		MPI_Recv(&message, 4, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-		printf("%d: Odebralem\n", rank);
+		MPI_Recv(&message, 3, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+		cout << lamportClock << ":" << myrank << "\tOdebralem\n";
 		if(lamportClock < message[2])
 		{
 			lamportClock = message[2] + 1;
@@ -82,15 +91,20 @@ int main(int argc, char **argv)
 		{
 			lamportClock += 1;
 		}
-		printf("%d: Odebralem z czasem %d\n", rank, lamportClock);
+		cout << lamportClock << ":" << myrank << "\tOdebralem z czasem\n";
 		lamportClock += 1;
-		message[0] = rank;
+		message[0] = myrank;
 		message[1] = 20;
 		message[2] = lamportClock;
-		message[3] = 1;
-		MPI_Send(&message, 4, MPI_INT, 0, MYTAG, MPI_COMM_WORLD);
-		printf("%d: Wyslalem z czasem%d\n", rank, lamportClock);
+		MPI_Send(&message, 3, MPI_INT, 0, MYTAG, MPI_COMM_WORLD);
+		cout << lamportClock << ":" << myrank << "\tWyslalem z czasem\n";
 	}
-
 	MPI_Finalize();
 }
+
+void *receive_loop(void * arg) {
+	MPI_Status status;
+	cout << lamportClock << ":" <<myrank << "\treceive loop" << "\n";
+}
+
+
