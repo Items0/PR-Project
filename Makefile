@@ -1,5 +1,6 @@
 all: main
 
-main: main.c
-	mpicc main.c -o main
+main: main.cpp
+	mpic++ -Wall -pthread -std=c++11 main.cpp -o main
+
 	@echo "Compilation complete"
