@@ -1,0 +1,26 @@
+6 procesow , 2 arbitrow
+
+17:2		CHLANIE! Zgody = 5
+21:5		CHLANIE! Zgody = 4
+29:2		KONIEC CHLANIA!
+34:5		KONIEC CHLANIA!
+37:4		CHLANIE! Zgody = 5
+38:3		CHLANIE! Zgody = 4
+39:0		CHLANIE! Zgody = 5  ---> co ten master robi?
+39:0		KONIEC CHLANIA!     ---> co ten master robi?
+51:4		KONIEC CHLANIA!
+54:3		KONIEC CHLANIA!
+57:1		CHLANIE! Zgody = 5
+58:5		CHLANIE! Zgody = 4
+61:0		CHLANIE! Zgody = 5  --> co ten master ?
+65:0		KONIEC CHLANIA!     -->co ten master ?
+66:1		KONIEC CHLANIA!
+70:2		CHLANIE! Zgody = 4
+71:5		KONIEC CHLANIA!
+75:3		CHLANIE! Zgody = 4
+85:2		KONIEC CHLANIA!
+88:3		KONIEC CHLANIA!
+91:4		CHLANIE! Zgody = 5
+92:5		CHLANIE! Zgody = 4
+97:0		CHLANIE! Zgody = 5
+
