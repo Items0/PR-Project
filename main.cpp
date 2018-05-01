@@ -151,7 +151,10 @@ void *receive_loop(void * arg) {
 	{
 		MPI_Recv(&message, 4, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
 		clockUpdate(message[2]);
+
+		//czas kiedy nadawca arb_question zaczal pytac lub moj czas w jakim zaczalem rozsylac zapytanie na ktory dostaje zgode
 		int clockWhenStartRecv=message[3];
+		
 		switch (message[1])
 		{
 			case TAG_ARB_QUE:
@@ -172,7 +175,7 @@ void *receive_loop(void * arg) {
 				{
 					printf("HERE\t\t%d\n", status.MPI_SOURCE);
 					//if(message[2] < lamportClock) status.MPI_SOURCE -> nadawca 
-					if(message[2]<clockWhenStart){
+					if(clockWhenStartRecv<clockWhenStart){
 						clockUpdate();
 						message[0] = myrank;
 						message[1] = TAG_ARB_ANS_OK;
@@ -184,8 +187,8 @@ void *receive_loop(void * arg) {
 					}
 
 					//jesli remis to priorytet ma ten z mniejszym rankiem
-					else if (message[2]==clockWhenStart){
-						if(message[2] + status.MPI_SOURCE < clockWhenStart + myrank){
+					else if (clockWhenStartRecv==clockWhenStart){
+						if(clockWhenStartRecv + status.MPI_SOURCE < clockWhenStart + myrank){
 						clockUpdate();
 						message[0] = myrank;
 						message[1] = TAG_ARB_ANS_OK;
@@ -210,7 +213,7 @@ void *receive_loop(void * arg) {
 
 			case TAG_ARB_ANS_OK:
 				
-				if ( message[3]==clockWhenStart){
+				if ( clockWhenStartRecv==clockWhenStart){
 				clockUpdate();
 				pthread_mutex_lock(&nAgree_mutex);
 				nAgree += 1;
