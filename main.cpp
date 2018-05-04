@@ -40,11 +40,11 @@ int size, myrank;
 int arbiter = nArbiter;
 int lamportClock = 0;
 int nAgree = 0;
-bool want;
+bool want = false;
 
 queue <queueType> myQueue;
 
-int clockWhenStart=0;
+int clockWhenStart = 0;
 
 void *receive_loop(void * arg);
 void clockUpdate(int valueFromMsg);
@@ -107,11 +107,10 @@ int main(int argc, char **argv)
 		delay = rand() % 5;
 		sleep(delay);
 		//printf("%d:%d\t\tDelay =  %d\n", lamportClock, myrank, delay);
-
 		pthread_mutex_lock(&want_mutex);
 		want = true;
 		pthread_mutex_unlock(&want_mutex);
-		
+		bool first = true;
 		for (int i = 0; i < size; i++)
 		{
 			if (i != myrank)
@@ -120,10 +119,11 @@ int main(int argc, char **argv)
 				message[0] = myrank;
 				message[1] = TAG_ARB_QUE;
 				message[2] = check_Lamport_Clock();
-				if (i == 0) clockWhenStart = message[2];
+				if (first) clockWhenStart = message[2];
 				message[3] = clockWhenStart;
 				MPI_Send(&message, 4, MPI_INT, i, MYTAG, MPI_COMM_WORLD);
 				//printf("%d:%d\t\tWyslalem do %d\n", lamportClock, myrank, i);
+				first = false;			
 			}	
 		}
 		
@@ -158,7 +158,6 @@ int main(int argc, char **argv)
 			//printf("%d:%d\t\tWyslalem zgode z kolejki do %d\n", lamportClock, myrank, myQueue.front().senderRank);
 			myQueue.pop();
 			pthread_mutex_unlock(&queue_mutex);
-		
 		};
 
 		sleep(5);
@@ -180,7 +179,7 @@ void *receive_loop(void * arg) {
 		{
 			case TAG_ARB_QUE:
 				//printf("%d:%d\t\tOdebralem\n", lamportClock, myrank);
-				clockWhenStartRecv=message[3]; //czas kiedy nadawca arb_question zaczal pytac 
+				clockWhenStartRecv = message[3]; //czas kiedy nadawca arb_question zaczal pytac 
 				if (check_Want())
 				{	
 					clockUpdate();
@@ -194,7 +193,8 @@ void *receive_loop(void * arg) {
 				else
 				{
 					//if(message[2] < lamportClock) status.MPI_SOURCE -> nadawca 
-					if(clockWhenStartRecv < clockWhenStart)
+					if((clockWhenStartRecv < clockWhenStart) 
+						|| ((clockWhenStartRecv == clockWhenStart) && (status.MPI_SOURCE < myrank)))
 					{
 						clockUpdate();
 						message[0] = myrank;
@@ -204,35 +204,16 @@ void *receive_loop(void * arg) {
 						MPI_Send(&message, 4, MPI_INT, status.MPI_SOURCE, MYTAG, MPI_COMM_WORLD);
 						//printf("%d:%d\t\tWyslalem z czasem, do odbiorcy %d \n", lamportClock, myrank, status.MPI_SOURCE);
 					}
-					//jesli remis to priorytet ma ten z mniejszym rankiem
 					else 
 					{
-						if (clockWhenStartRecv == clockWhenStart)
-						{
-							if(status.MPI_SOURCE <  myrank)
-							{
-								clockUpdate();
-								message[0] = myrank;
-								message[1] = TAG_ARB_ANS_OK;
-								message[2] = check_Lamport_Clock();
-								message[3] = clockWhenStartRecv;
-								MPI_Send(&message, 4, MPI_INT, status.MPI_SOURCE, MYTAG, MPI_COMM_WORLD);
-								//printf("%d:%d\t\tWyslalem z czasem\n", lamportClock, myrank);
-								//printf("%d:%d\t\tWyslalem z czasem, do odbiorcy %d \n", lamportClock, myrank,status.MPI_SOURCE);
-							}
-						}
-						else
-						{
-							//Wstrzymaj
-							pthread_mutex_lock(&queue_mutex);
-							queueType waitProcess = {status.MPI_SOURCE,clockWhenStartRecv};
-	 						myQueue.push(waitProcess);
-							pthread_mutex_unlock(&queue_mutex);
-							//printf("%d:%d\t\tOdlozylem na kolejke, odlozony proces %d , jego czas %d\n", lamportClock, myrank,status.MPI_SOURCE,clockWhenStartRecv);
-						}
+						//Wstrzymaj
+						pthread_mutex_lock(&queue_mutex);
+						queueType waitProcess = {status.MPI_SOURCE,clockWhenStartRecv};
+	 					myQueue.push(waitProcess);
+						pthread_mutex_unlock(&queue_mutex);
+						//printf("%d:%d\t\tOdlozylem na kolejke, odlozony proces %d , jego czas %d\n", lamportClock, myrank,status.MPI_SOURCE,clockWhenStartRecv);
 					}
 				}
-				//cout << lamportClock << ":" << myrank << "\t\tWyslalem z czasem\n" << flush;
 				break;
 
 			case TAG_ARB_ANS_OK:
@@ -240,7 +221,7 @@ void *receive_loop(void * arg) {
 				clockWhenStartRecv = message[3];
 				if (clockWhenStartRecv == clockWhenStart)
 				{
-					clockUpdate();
+					//clockUpdate();
 					pthread_mutex_lock(&nAgree_mutex);
 					nAgree += 1;
 					pthread_mutex_unlock(&nAgree_mutex);
@@ -251,13 +232,15 @@ void *receive_loop(void * arg) {
 	}
 }
 
-void clockUpdate(int valueFromMsg) {
+void clockUpdate(int valueFromMsg) 
+{
 	pthread_mutex_lock(&clock_mutex);
 	lamportClock = max(lamportClock, valueFromMsg) + 1;
 	pthread_mutex_unlock(&clock_mutex);
 }
 
-void clockUpdate() {
+void clockUpdate() 
+{
 	pthread_mutex_lock(&clock_mutex);
 	lamportClock += 1;
 	pthread_mutex_unlock(&clock_mutex);
