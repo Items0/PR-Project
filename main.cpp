@@ -12,9 +12,6 @@
 
 using namespace std;
 
-
-bool debug = true;
-
 /*
 	tablica message
 	0 - sender_id
@@ -38,6 +35,8 @@ struct queueType
 	int senderRank;
 	int senderClock;
 };
+
+int debug = 0;
 
 int size, myrank;
 int arbiter = nArbiter;
@@ -89,10 +88,11 @@ int check_Lamport_Clock(){
 
 int main(int argc, char **argv)
 {
-	// Enable thread in MPI 
+	//Program parameters
+	if (argc > 1) debug = atoi(argv[1]);
+	//Enable thread in MPI 
 	int provided = 0;
 	MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided);
-
 
 	//Create thread
 	pthread_t receive_thread;
