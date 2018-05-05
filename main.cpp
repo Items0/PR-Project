@@ -36,63 +36,36 @@ struct queueType
 	int senderClock;
 };
 
+//kolejka struktur
+queue <queueType> myQueue;
+
+//zmienna do debugowania
 int debug = 0;
 
+//zmienne 
 int size, myrank;
 int arbiter = nArbiter;
 int lamportClock = 0;
 int nAgree = 0;
 bool want = false;
-
-queue <queueType> myQueue;
-
 int clockWhenStart = 0;
 
+//deklaracje funkcji 
 void *receive_loop(void * arg);
 void clockUpdate(int valueFromMsg);
 void clockUpdate();
-
+bool check_Want();
+int check_Lamport_Clock();
+int check_N_agree();
+int check_clock_Start();
+bool check_Queue();
+//mutexy
 pthread_mutex_t	clock_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t nAgree_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t queue_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t want_mutex= PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t clockStart_mutex= PTHREAD_MUTEX_INITIALIZER;
 
-int check_N_agree(){
-		pthread_mutex_lock(&nAgree_mutex);
-		int myN= nAgree;
-		pthread_mutex_unlock(&nAgree_mutex);
-		return myN;
-}
-
-bool check_Queue(){
-	pthread_mutex_lock(&queue_mutex);
-	bool my= myQueue.empty();
-	pthread_mutex_unlock(&queue_mutex);
-	return my;
-}
-
-bool check_Want(){
-	pthread_mutex_lock(&want_mutex);
-	bool myWant = want;
-	pthread_mutex_unlock(&want_mutex);
-	if (myWant == true) return true;
-	else return false;
-}
-
-int check_Lamport_Clock(){
-	pthread_mutex_lock(&clock_mutex);
-	int myLam = lamportClock;
-	pthread_mutex_unlock(&clock_mutex);
-	return myLam;
-}
-
-int check_clock_Start(){
-	pthread_mutex_lock(&clockStart_mutex);
-	int myClock = clockWhenStart;
-	pthread_mutex_unlock(&clockStart_mutex);
-	return myClock;
-}
 
 int main(int argc, char **argv)
 {
@@ -117,14 +90,12 @@ int main(int argc, char **argv)
 	while(1)
 	{	
 
-
 		delay = rand() % 5;
 		sleep(delay);
-		//printf("%d:%d\t\tDelay =  %d\n", lamportClock, myrank, delay);
+
 		pthread_mutex_lock(&want_mutex);
 		want = true;
 		pthread_mutex_unlock(&want_mutex);
-		
 		bool first = true;
 		
 		for (int i = 0; i < size; i++)
@@ -168,7 +139,7 @@ int main(int argc, char **argv)
 		while(!check_Queue())
 		{
 			clockUpdate();
-			
+			pthread_mutex_lock(&queue_mutex);
 			message[0] = myrank;
 			message[1] = TAG_ARB_ANS_OK;
 			message[2] = check_Lamport_Clock();
@@ -176,7 +147,7 @@ int main(int argc, char **argv)
 
 			MPI_Send(&message, 4, MPI_INT, myQueue.front().senderRank, MYTAG, MPI_COMM_WORLD);
 			if (debug) printf("%d:%d\t\tWyslalem zgode z kolejki do %d\n", check_Lamport_Clock(), myrank, myQueue.front().senderRank);
-			pthread_mutex_lock(&queue_mutex);
+			
 			myQueue.pop();
 			pthread_mutex_unlock(&queue_mutex);
 		};
@@ -188,7 +159,6 @@ int main(int argc, char **argv)
 }
 
 void *receive_loop(void * arg) {
-	//printf("%d:%d\t\treceive loop\n", lamportClock, myrank);
 	MPI_Status status;
 	int message[4];
 	while (1)
@@ -199,8 +169,8 @@ void *receive_loop(void * arg) {
 		switch (message[1])
 		{
 			case TAG_ARB_QUE:
-				//printf("%d:%d\t\tOdebralem\n", lamportClock, myrank);
-				clockWhenStartRecv = message[3]; //czas kiedy nadawca arb_question zaczal pytac 
+				//czas kiedy nadawca arb_question zaczal pytac
+				clockWhenStartRecv = message[3];  
 				
 				if (!check_Want())
 				{	
@@ -214,7 +184,7 @@ void *receive_loop(void * arg) {
 				}
 				else
 				{
-					//if(message[2] < lamportClock) status.MPI_SOURCE -> nadawca 
+					// jesli nadawca zaczal szybciej ode mnie lub tak samo ale ma nizszy rank 
 					if((clockWhenStartRecv < check_clock_Start()) || ((clockWhenStartRecv == check_clock_Start()) && (status.MPI_SOURCE < myrank)))
 					{
 						clockUpdate();
@@ -227,7 +197,7 @@ void *receive_loop(void * arg) {
 					}
 					else 
 					{
-						//Wstrzymaj
+						//Wstrzymaj odpowiedz
 						pthread_mutex_lock(&queue_mutex);
 						queueType waitProcess = {status.MPI_SOURCE,clockWhenStartRecv};
 	 					myQueue.push(waitProcess);
@@ -265,4 +235,41 @@ void clockUpdate()
 	pthread_mutex_lock(&clock_mutex);
 	lamportClock += 1;
 	pthread_mutex_unlock(&clock_mutex);
+}
+
+
+int check_N_agree(){
+		pthread_mutex_lock(&nAgree_mutex);
+		int myN= nAgree;
+		pthread_mutex_unlock(&nAgree_mutex);
+		return myN;
+}
+
+bool check_Queue(){
+	pthread_mutex_lock(&queue_mutex);
+	bool my= myQueue.empty();
+	pthread_mutex_unlock(&queue_mutex);
+	return my;
+}
+
+bool check_Want(){
+	pthread_mutex_lock(&want_mutex);
+	bool myWant = want;
+	pthread_mutex_unlock(&want_mutex);
+	if (myWant == true) return true;
+	else return false;
+}
+
+int check_Lamport_Clock(){
+	pthread_mutex_lock(&clock_mutex);
+	int myLam = lamportClock;
+	pthread_mutex_unlock(&clock_mutex);
+	return myLam;
+}
+
+int check_clock_Start(){
+	pthread_mutex_lock(&clockStart_mutex);
+	int myClock = clockWhenStart;
+	pthread_mutex_unlock(&clockStart_mutex);
+	return myClock;
 }
