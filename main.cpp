@@ -7,7 +7,7 @@
 #include <cstdlib>
 #include <ctime>
 #include <queue>
-#define nArbiter 2
+#define nArbiter 4
 #define MYTAG 100
 
 using namespace std;
@@ -59,6 +59,7 @@ int check_Lamport_Clock();
 int check_N_agree();
 int check_clock_Start();
 bool check_Queue();
+
 //mutexy
 pthread_mutex_t	clock_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t nAgree_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -90,8 +91,8 @@ int main(int argc, char **argv)
 	while(1)
 	{	
 
-		delay = rand() % 5;
-		sleep(delay);
+		//delay = rand() % 5;
+		//sleep(delay);
 
 		pthread_mutex_lock(&want_mutex);
 		want = true;
@@ -124,8 +125,19 @@ int main(int argc, char **argv)
 			sleep(1);
 		}
 
-		printf("%d:%d\t\tCHLANIE! Zgody = %d\n", check_Lamport_Clock(), myrank, nAgree);
+		printf("%d:%d\t\tCHLANIE! Zgody = %d\n", check_Lamport_Clock(), myrank, check_N_agree());
 		sleep(10);
+
+		//po prostu jak on juz chlal to musi swoj czas ustawic na jakas inna wartosc zeby ktos mu nie przyslal zgody kiedy on ma sleepa na koncu i na poczatku ktora mu sie bd liczyc
+		// to nie dzialalo za bardzo wiec wywalilem sleepa na koncu i poczatku, jako rozw tymczasowe
+		// po prostu zakladasz ze mial czas startu=5 dostal wszystkie zgody ale do kolejnego firsta w kolejnej iteracji while mial ta wartosc i czasami zaczynal z nAgree =1 zbieranie zgod
+		//generalnei mozna by mu po prostu zerowac nAgree jeszcze na starcie while 
+
+		//pthread_mutex_lock(&clockStart_mutex);
+		//clockWhenStart=-1;
+		//pthread_mutex_unlock(&clockStart_mutex);
+		
+		
 		printf("%d:%d\t\tKONIEC CHLANIA!\n", check_Lamport_Clock(), myrank);
 
 		pthread_mutex_lock(&want_mutex);	
@@ -135,6 +147,7 @@ int main(int argc, char **argv)
 		pthread_mutex_lock(&nAgree_mutex);	
 		nAgree = 0;
 		pthread_mutex_unlock(&nAgree_mutex);
+		
 		
 		while(!check_Queue())
 		{
@@ -152,7 +165,7 @@ int main(int argc, char **argv)
 			pthread_mutex_unlock(&queue_mutex);
 		};
 
-		sleep(5);
+		//sleep(5);
 	};
 		
 	MPI_Finalize();
@@ -161,6 +174,7 @@ int main(int argc, char **argv)
 void *receive_loop(void * arg) {
 	MPI_Status status;
 	int message[4];
+	
 	while (1)
 	{
 		MPI_Recv(&message, 4, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
@@ -208,8 +222,10 @@ void *receive_loop(void * arg) {
 				break;
 
 			case TAG_ARB_ANS_OK:
+				
 				//czas mojego zadania na ktore dostaje zgode
 				clockWhenStartRecv = message[3];
+				
 				if (clockWhenStartRecv == check_clock_Start())
 				{
 					//clockUpdate();
