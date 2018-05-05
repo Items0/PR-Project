@@ -183,7 +183,7 @@ void *receive_loop(void * arg) {
 			case TAG_ARB_QUE:
 				//printf("%d:%d\t\tOdebralem\n", lamportClock, myrank);
 				clockWhenStartRecv = message[3]; //czas kiedy nadawca arb_question zaczal pytac 
-				if (check_Want())
+				if (!check_Want())
 				{	
 					clockUpdate();
 					message[0] = myrank;
