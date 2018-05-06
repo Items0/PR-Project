@@ -20,8 +20,8 @@ using namespace std;
 	3 - clockWhenStart -> time when sender starts send request
 
 	TAGI:
-	10 - zapytanie o arbita
-	20 - odpowiedz do arbitra
+	10 - zapytanie o arbita TAG_ARB_QUE
+	20 - odpowiedz do arbitra TAG_ARB_ANS_OK
 */
 
 enum tags
@@ -91,12 +91,17 @@ int main(int argc, char **argv)
 	while(1)
 	{	
 
-		//delay = rand() % 5;
-		//sleep(delay);
+		delay = rand() % 5;
+		sleep(delay);
 
 		pthread_mutex_lock(&want_mutex);
 		want = true;
 		pthread_mutex_unlock(&want_mutex);
+		
+		pthread_mutex_lock(&nAgree_mutex);	
+		nAgree = 0;
+		pthread_mutex_unlock(&nAgree_mutex);
+
 		bool first = true;
 		
 		for (int i = 0; i < size; i++)
@@ -127,17 +132,6 @@ int main(int argc, char **argv)
 
 		printf("%d:%d\t\tCHLANIE! Zgody = %d\n", check_Lamport_Clock(), myrank, check_N_agree());
 		sleep(10);
-
-		//po prostu jak on juz chlal to musi swoj czas ustawic na jakas inna wartosc zeby ktos mu nie przyslal zgody kiedy on ma sleepa na koncu i na poczatku ktora mu sie bd liczyc
-		// to nie dzialalo za bardzo wiec wywalilem sleepa na koncu i poczatku, jako rozw tymczasowe
-		// po prostu zakladasz ze mial czas startu=5 dostal wszystkie zgody ale do kolejnego firsta w kolejnej iteracji while mial ta wartosc i czasami zaczynal z nAgree =1 zbieranie zgod
-		//generalnei mozna by mu po prostu zerowac nAgree jeszcze na starcie while 
-
-		//pthread_mutex_lock(&clockStart_mutex);
-		//clockWhenStart=-1;
-		//pthread_mutex_unlock(&clockStart_mutex);
-		
-		
 		printf("%d:%d\t\tKONIEC CHLANIA!\n", check_Lamport_Clock(), myrank);
 
 		pthread_mutex_lock(&want_mutex);	
@@ -165,7 +159,7 @@ int main(int argc, char **argv)
 			pthread_mutex_unlock(&queue_mutex);
 		};
 
-		//sleep(5);
+		
 	};
 		
 	MPI_Finalize();
